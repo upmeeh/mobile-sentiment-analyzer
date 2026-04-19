@@ -69,7 +69,6 @@ section[data-testid="stMain"] > div {
     margin: 0 auto;
 }
 
-/* dot grid background */
 .stApp::before {
     content: '';
     position: fixed;
@@ -82,7 +81,6 @@ section[data-testid="stMain"] > div {
 
 .block-container { position: relative; z-index: 1; }
 
-/* ---- NAV BAR ---- */
 .nav {
     display: flex;
     justify-content: space-between;
@@ -107,7 +105,6 @@ section[data-testid="stMain"] > div {
     color: #888;
 }
 
-/* ---- HERO ---- */
 .hero-eyebrow {
     font-size: 10px;
     letter-spacing: 0.3em;
@@ -139,7 +136,6 @@ section[data-testid="stMain"] > div {
     margin-bottom: 3rem;
 }
 
-/* ---- GRID RULE ---- */
 .grid-rule {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
@@ -158,7 +154,6 @@ section[data-testid="stMain"] > div {
     text-transform: uppercase;
 }
 
-/* ---- INPUT SECTION ---- */
 .input-label {
     font-size: 9px;
     letter-spacing: 0.25em;
@@ -188,7 +183,6 @@ textarea:focus {
 
 textarea::placeholder { color: #bbb !important; }
 
-/* ---- BUTTON ---- */
 div[data-testid="stButton"] button {
     background: #111 !important;
     color: #F2F0EB !important;
@@ -209,7 +203,6 @@ div[data-testid="stButton"] button:hover {
     background: #333 !important;
 }
 
-/* ---- RESULTS ---- */
 .result-header {
     display: flex;
     align-items: center;
@@ -243,8 +236,10 @@ div[data-testid="stButton"] button:hover {
     border: 1px solid #00000022;
 }
 
+/* CHANGED: added neutral verdict style */
 .verdict-pos { background: #111; }
 .verdict-neg { background: #F2F0EB; border: 1px solid #111; }
+.verdict-neu { background: #F2F0EB; border: 1px solid #99999966; }
 
 .verdict-word {
     font-family: 'Space Mono', monospace;
@@ -255,6 +250,8 @@ div[data-testid="stButton"] button:hover {
 }
 .verdict-pos .verdict-word { color: #F2F0EB; }
 .verdict-neg .verdict-word { color: #111; }
+/* CHANGED: neutral word color */
+.verdict-neu .verdict-word { color: #888; }
 
 .verdict-meta {
     font-size: 9px;
@@ -263,8 +260,9 @@ div[data-testid="stButton"] button:hover {
 }
 .verdict-pos .verdict-meta { color: #888; }
 .verdict-neg .verdict-meta { color: #666; }
+/* CHANGED: neutral meta color */
+.verdict-neu .verdict-meta { color: #aaa; }
 
-/* ---- ASPECT GRID ---- */
 .aspect-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -306,8 +304,9 @@ div[data-testid="stButton"] button:hover {
 
 .apos { background: #111; color: #F2F0EB; }
 .aneg { background: transparent; color: #111; border: 1px solid #111; }
+/* CHANGED: neutral aspect badge */
+.aneu { background: transparent; color: #888; border: 1px solid #99999966; }
 
-/* ---- FOOTER ---- */
 .footer {
     margin-top: 4rem;
     padding: 1.5rem 0;
@@ -322,7 +321,6 @@ div[data-testid="stButton"] button:hover {
 </style>
 """, unsafe_allow_html=True)
 
-# Nav
 st.markdown("""
 <div class="nav">
     <div class="nav-logo">Phone(Sense)</div>
@@ -330,14 +328,12 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Hero
 st.markdown("""
 <div class="hero-eyebrow">// sentiment analysis</div>
 <div class="hero-title">READ THE<br><span>REVIEW.</span></div>
 <div class="hero-desc">Mobile phone review analyzer — battery · camera · display · build</div>
 """, unsafe_allow_html=True)
 
-# Grid info strip
 st.markdown("""
 <div class="grid-rule">
     <div class="grid-cell">Model — LogReg</div>
@@ -346,12 +342,10 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Input
 st.markdown('<div class="input-label">// input review</div>', unsafe_allow_html=True)
 user_input = st.text_area("", placeholder="camera is great but battery drains too fast...", height=120, label_visibility="collapsed")
 analyze = st.button("ANALYZE →")
 
-# Results
 if analyze:
     if user_input.strip() == "":
         st.warning("Input a review first.")
@@ -359,10 +353,23 @@ if analyze:
         vec = vectorizer.transform([user_input])
         overall = model.predict(vec)[0]
 
-        is_pos = overall == "positive"
-        verdict_css = "verdict-pos" if is_pos else "verdict-neg"
-        verdict_word = "POSITIVE" if is_pos else "NEGATIVE"
-        verdict_meta = "SIGNAL_POS // REVIEW_FAVORABLE" if is_pos else "SIGNAL_NEG // REVIEW_CRITICAL"
+        # CHANGED: confidence score using predict_proba
+        proba = model.predict_proba(vec)[0]
+        confidence = round(max(proba) * 100)
+
+        # CHANGED: neutral branch added
+        if overall == "positive":
+            verdict_css = "verdict-pos"
+            verdict_word = "POSITIVE"
+            verdict_meta = f"SIGNAL_POS // CONFIDENCE_{confidence}%"
+        elif overall == "negative":
+            verdict_css = "verdict-neg"
+            verdict_word = "NEGATIVE"
+            verdict_meta = f"SIGNAL_NEG // CONFIDENCE_{confidence}%"
+        else:
+            verdict_css = "verdict-neu"
+            verdict_word = "NEUTRAL"
+            verdict_meta = f"SIGNAL_NEU // CONFIDENCE_{confidence}%"
 
         st.markdown(f"""
         <div class="result-header">
@@ -387,8 +394,17 @@ if analyze:
             cells = ""
             for aspect, sentiment in aspects.items():
                 code = ASPECT_ICONS.get(aspect, "???")
-                badge_class = "apos" if sentiment == "positive" else "aneg"
-                badge_text = "POSITIVE" if sentiment == "positive" else "NEGATIVE"
+                # CHANGED: neutral badge added
+                if sentiment == "positive":
+                    badge_class = "apos"
+                    badge_text = "POSITIVE"
+                elif sentiment == "negative":
+                    badge_class = "aneg"
+                    badge_text = "NEGATIVE"
+                else:
+                    badge_class = "aneu"
+                    badge_text = "NEUTRAL"
+
                 cells += f"""
                 <div class="aspect-cell">
                     <div class="aspect-code">{code}_MODULE</div>
@@ -399,7 +415,6 @@ if analyze:
 
             st.markdown(f'<div class="aspect-grid">{cells}</div>', unsafe_allow_html=True)
 
-# Footer
 st.markdown("""
 <div class="footer">
     <span>PhoneSense © 2025</span>

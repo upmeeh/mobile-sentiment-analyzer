@@ -1,14 +1,17 @@
-import streamlit as st
+from flask import Flask, request, render_template_string
 import pickle
 import os
 
-script_dir = os.path.dirname(os.path.abspath(__file__))
+app = Flask(__name__)
 
+# ---- Load model ----
+script_dir = os.path.dirname(os.path.abspath(__file__))
 with open(os.path.join(script_dir, 'model.pkl'), 'rb') as f:
     model = pickle.load(f)
 with open(os.path.join(script_dir, 'vectorizer.pkl'), 'rb') as f:
     vectorizer = pickle.load(f)
 
+# ---- Aspect logic (same as yours) ----
 ASPECTS = {
     "Battery": ["battery", "charge", "charging", "drain", "life"],
     "Camera": ["camera", "photo", "picture", "lens", "zoom", "selfie"],
@@ -29,8 +32,7 @@ ASPECT_ICONS = {
 
 def get_aspect_sentiments(review):
     sentences = (
-        review
-        .replace("!", ".")
+        review.replace("!", ".")
         .replace("?", ".")
         .replace(" but ", ". ")
         .replace(" however ", ". ")
@@ -39,385 +41,239 @@ def get_aspect_sentiments(review):
     )
     results = {}
     for sentence in sentences:
-        sentence = sentence.strip()
-        if not sentence:
+        s = sentence.strip()
+        if not s:
             continue
         for aspect, keywords in ASPECTS.items():
-            if any(word in sentence.lower() for word in keywords):
-                vec = vectorizer.transform([sentence])
+            if any(w in s.lower() for w in keywords):
+                vec = vectorizer.transform([s])
                 pred = model.predict(vec)[0]
                 results[aspect] = pred
     return results
 
-st.set_page_config(page_title="PhoneSense", page_icon="📱", layout="centered")
-
-st.markdown("""
+# ---- HTML (ported style) ----
+HTML = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Smartphone Review Classification</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Ndot+57:wght@400&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
-.stApp {
-    background-color: #F2F0EB;
+body {
+    background: #F2F0EB;
     font-family: 'Space Mono', monospace;
+    color: #111;
 }
 
-section[data-testid="stMain"] > div {
-    padding-top: 0 !important;
-    max-width: 720px;
-    margin: 0 auto;
-}
-
-.stApp::before {
+/* subtle grid */
+body::before {
     content: '';
     position: fixed;
     inset: 0;
     background-image: radial-gradient(circle, #00000018 1px, transparent 1px);
     background-size: 24px 24px;
     pointer-events: none;
-    z-index: 0;
 }
 
-.block-container { position: relative; z-index: 1; }
+.container {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 20px;
+}
 
+/* nav */
 .nav {
     display: flex;
     justify-content: space-between;
-    align-items: center;
-    padding: 1.2rem 0;
     border-bottom: 1px solid #00000022;
-    margin-bottom: 3rem;
+    padding-bottom: 10px;
+    margin-bottom: 30px;
 }
 
-.nav-logo {
-    font-family: 'Space Mono', monospace;
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.3em;
-    color: #111;
-    text-transform: uppercase;
-}
+.nav-logo { font-weight: 700; letter-spacing: 0.3em; font-size: 13px; }
+.nav-tag { font-size: 10px; color: #888; }
 
-.nav-tag {
-    font-size: 10px;
-    letter-spacing: 0.2em;
-    color: #888;
-}
-
-.hero-eyebrow {
-    font-size: 10px;
-    letter-spacing: 0.3em;
-    color: #888;
-    text-transform: uppercase;
-    margin-bottom: 1rem;
-}
-
+/* hero */
+.hero-eyebrow { font-size: 10px; letter-spacing: 0.3em; color: #888; margin-bottom: 10px; }
 .hero-title {
-    font-family: 'Space Mono', monospace;
-    font-size: clamp(2.8rem, 8vw, 5rem);
+    font-size: 3rem;
     font-weight: 700;
-    color: #111;
-    line-height: 0.95;
-    letter-spacing: -0.02em;
-    margin-bottom: 1.5rem;
+    line-height: 1;
+    margin-bottom: 15px;
 }
+.hero-title span { border-bottom: 3px solid #111; }
+.hero-desc { font-size: 11px; letter-spacing: 0.15em; color: #666; margin-bottom: 30px; }
 
-.hero-title span {
-    display: inline-block;
-    border-bottom: 3px solid #111;
-}
-
-.hero-desc {
-    font-size: 11px;
-    letter-spacing: 0.15em;
-    color: #666;
-    text-transform: uppercase;
-    margin-bottom: 3rem;
-}
-
-.grid-rule {
+/* grid rule */
+.grid {
     display: grid;
     grid-template-columns: 1fr 1fr 1fr;
-    border-top: 1px solid #00000022;
-    border-left: 1px solid #00000022;
-    margin-bottom: 2rem;
-}
-
-.grid-cell {
-    border-right: 1px solid #00000022;
-    border-bottom: 1px solid #00000022;
-    padding: 0.8rem 1rem;
-    font-size: 9px;
-    letter-spacing: 0.2em;
-    color: #999;
-    text-transform: uppercase;
-}
-
-.input-label {
-    font-size: 9px;
-    letter-spacing: 0.25em;
-    color: #999;
-    text-transform: uppercase;
-    margin-bottom: 0.5rem;
-}
-
-div[data-testid="stTextArea"] label { display: none !important; }
-
-textarea {
-    background: #FFFFFF !important;
-    border: 1px solid #00000033 !important;
-    border-radius: 0 !important;
-    color: #111 !important;
-    font-family: 'Space Mono', monospace !important;
-    font-size: 13px !important;
-    letter-spacing: 0.05em !important;
-    resize: none !important;
-}
-
-textarea:focus {
-    border-color: #111 !important;
-    box-shadow: none !important;
-    outline: none !important;
-}
-
-textarea::placeholder { color: #bbb !important; }
-
-div[data-testid="stButton"] button {
-    background: #111 !important;
-    color: #F2F0EB !important;
-    font-family: 'Space Mono', monospace !important;
-    font-weight: 700 !important;
-    font-size: 11px !important;
-    letter-spacing: 0.25em !important;
-    text-transform: uppercase !important;
-    border: none !important;
-    border-radius: 0 !important;
-    padding: 0.9rem 2rem !important;
-    width: 100% !important;
-    margin-top: 2px !important;
-    transition: background 0.15s !important;
-}
-
-div[data-testid="stButton"] button:hover {
-    background: #333 !important;
-}
-
-.result-header {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    border-top: 1px solid #00000022;
-    padding-top: 2rem;
-    margin-top: 2rem;
-    margin-bottom: 1.5rem;
-}
-
-.result-header-label {
-    font-size: 9px;
-    letter-spacing: 0.3em;
-    color: #999;
-    text-transform: uppercase;
-    flex: 1;
-}
-
-.result-header-line {
-    flex: 3;
-    height: 1px;
-    background: #00000015;
-}
-
-.verdict-block {
-    padding: 2rem;
-    margin-bottom: 2rem;
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
     border: 1px solid #00000022;
+    margin-bottom: 20px;
+}
+.grid div {
+    border-right: 1px solid #00000022;
+    padding: 10px;
+    font-size: 10px;
+}
+.grid div:last-child { border-right: none; }
+
+/* input */
+textarea {
+    width: 100%;
+    height: 120px;
+    border: 1px solid #00000033;
+    padding: 10px;
+    font-family: 'Space Mono';
+}
+button {
+    width: 100%;
+    padding: 12px;
+    margin-top: 10px;
+    background: #111;
+    color: white;
+    border: none;
+    cursor: pointer;
 }
 
-/* CHANGED: added neutral verdict style */
-.verdict-pos { background: #111; }
-.verdict-neg { background: #F2F0EB; border: 1px solid #111; }
-.verdict-neu { background: #F2F0EB; border: 1px solid #99999966; }
-
-.verdict-word {
-    font-family: 'Space Mono', monospace;
-    font-size: clamp(2rem, 6vw, 3.5rem);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    line-height: 1;
+/* verdict */
+.verdict {
+    margin-top: 30px;
+    padding: 20px;
+    border: 1px solid #00000022;
+    display: flex;
+    justify-content: space-between;
 }
-.verdict-pos .verdict-word { color: #F2F0EB; }
-.verdict-neg .verdict-word { color: #111; }
-/* CHANGED: neutral word color */
-.verdict-neu .verdict-word { color: #888; }
+.pos { background: #111; color: #F2F0EB; }
+.neg { background: #F2F0EB; border: 1px solid #111; }
+.neu { background: #F2F0EB; border: 1px solid #aaa; color: #888; }
 
-.verdict-meta {
-    font-size: 9px;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-}
-.verdict-pos .verdict-meta { color: #888; }
-.verdict-neg .verdict-meta { color: #666; }
-/* CHANGED: neutral meta color */
-.verdict-neu .verdict-meta { color: #aaa; }
-
+/* aspects */
 .aspect-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    border-top: 1px solid #00000022;
-    border-left: 1px solid #00000022;
+    border: 1px solid #00000022;
+    margin-top: 20px;
 }
-
-.aspect-cell {
+.aspect {
+    padding: 15px;
     border-right: 1px solid #00000022;
     border-bottom: 1px solid #00000022;
-    padding: 1.2rem 1.5rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
 }
+.aspect:nth-child(2n) { border-right: none; }
 
-.aspect-code {
-    font-size: 9px;
-    letter-spacing: 0.25em;
-    color: #999;
-}
-
-.aspect-name-text {
-    font-size: 15px;
-    font-weight: 700;
-    color: #111;
-    letter-spacing: -0.01em;
-}
-
-.aspect-result {
-    font-size: 10px;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    margin-top: 0.5rem;
-    padding: 3px 8px;
+.badge {
+    margin-top: 5px;
     display: inline-block;
-    width: fit-content;
+    padding: 3px 8px;
+    font-size: 10px;
 }
-
-.apos { background: #111; color: #F2F0EB; }
-.aneg { background: transparent; color: #111; border: 1px solid #111; }
-/* CHANGED: neutral aspect badge */
-.aneu { background: transparent; color: #888; border: 1px solid #99999966; }
+.apos { background:#111; color:white; }
+.aneg { border:1px solid #111; }
+.aneu { border:1px solid #aaa; color:#888; }
 
 .footer {
-    margin-top: 4rem;
-    padding: 1.5rem 0;
+    margin-top: 40px;
     border-top: 1px solid #00000022;
+    padding-top: 10px;
+    font-size: 10px;
     display: flex;
     justify-content: space-between;
-    font-size: 9px;
-    letter-spacing: 0.2em;
-    color: #bbb;
-    text-transform: uppercase;
 }
 </style>
-""", unsafe_allow_html=True)
+</head>
 
-st.markdown("""
+<body>
+<div class="container">
+
 <div class="nav">
-    <div class="nav-logo">Phone(Sense)</div>
+    <div class="nav-logo">Smartphone Review Classification</div>
     <div class="nav-tag">SYS_READY ●</div>
 </div>
-""", unsafe_allow_html=True)
 
-st.markdown("""
 <div class="hero-eyebrow">// sentiment analysis</div>
 <div class="hero-title">READ THE<br><span>REVIEW.</span></div>
-<div class="hero-desc">Mobile phone review analyzer — battery · camera · display · build</div>
-""", unsafe_allow_html=True)
+<div class="hero-desc">Mobile review analyzer</div>
 
-st.markdown("""
-<div class="grid-rule">
-    <div class="grid-cell">Model — LogReg</div>
-    <div class="grid-cell">Vectorizer — TF-IDF</div>
-    <div class="grid-cell">Dataset — 67K reviews</div>
+<div class="grid">
+    <div>Model — LogReg</div>
+    <div>Vectorizer</div>
+    <div>Dataset — Reviews</div>
 </div>
-""", unsafe_allow_html=True)
 
-st.markdown('<div class="input-label">// input review</div>', unsafe_allow_html=True)
-user_input = st.text_area("", placeholder="camera is great but battery drains too fast...", height=120, label_visibility="collapsed")
-analyze = st.button("ANALYZE →")
+<form method="POST">
+    <textarea name="review" placeholder="camera is great but battery drains fast..."></textarea>
+    <button>ANALYZE →</button>
+</form>
 
-if analyze:
-    if user_input.strip() == "":
-        st.warning("Input a review first.")
-    else:
-        vec = vectorizer.transform([user_input])
-        overall = model.predict(vec)[0]
+{% if result %}
+<div class="verdict {{css}}">
+    <div>{{word}}</div>
+    <div>{{confidence}}%</div>
+</div>
+{% endif %}
 
-        # CHANGED: confidence score using predict_proba
-        proba = model.predict_proba(vec)[0]
-        confidence = round(max(proba) * 100)
+{% if aspects %}
+<div class="aspect-grid">
+{% for a, val in aspects.items() %}
+<div class="aspect">
+    <div>{{a}}</div>
+    <div class="badge {{val_class[val]}}">{{val}}</div>
+</div>
+{% endfor %}
+</div>
+{% endif %}
 
-        # CHANGED: neutral branch added
-        if overall == "positive":
-            verdict_css = "verdict-pos"
-            verdict_word = "POSITIVE"
-            verdict_meta = f"SIGNAL_POS // CONFIDENCE_{confidence}%"
-        elif overall == "negative":
-            verdict_css = "verdict-neg"
-            verdict_word = "NEGATIVE"
-            verdict_meta = f"SIGNAL_NEG // CONFIDENCE_{confidence}%"
-        else:
-            verdict_css = "verdict-neu"
-            verdict_word = "NEUTRAL"
-            verdict_meta = f"SIGNAL_NEU // CONFIDENCE_{confidence}%"
-
-        st.markdown(f"""
-        <div class="result-header">
-            <div class="result-header-label">// verdict</div>
-            <div class="result-header-line"></div>
-        </div>
-        <div class="verdict-block {verdict_css}">
-            <div class="verdict-word">{verdict_word}</div>
-            <div class="verdict-meta">{verdict_meta}</div>
-        </div>
-        """, unsafe_allow_html=True)
-
-        aspects = get_aspect_sentiments(user_input)
-        if aspects:
-            st.markdown("""
-            <div class="result-header">
-                <div class="result-header-label">// aspect breakdown</div>
-                <div class="result-header-line"></div>
-            </div>
-            """, unsafe_allow_html=True)
-
-            cells = ""
-            for aspect, sentiment in aspects.items():
-                code = ASPECT_ICONS.get(aspect, "???")
-                # CHANGED: neutral badge added
-                if sentiment == "positive":
-                    badge_class = "apos"
-                    badge_text = "POSITIVE"
-                elif sentiment == "negative":
-                    badge_class = "aneg"
-                    badge_text = "NEGATIVE"
-                else:
-                    badge_class = "aneu"
-                    badge_text = "NEUTRAL"
-
-                cells += f"""
-                <div class="aspect-cell">
-                    <div class="aspect-code">{code}_MODULE</div>
-                    <div class="aspect-name-text">{aspect}</div>
-                    <div class="aspect-result {badge_class}">{badge_text}</div>
-                </div>
-                """
-
-            st.markdown(f'<div class="aspect-grid">{cells}</div>', unsafe_allow_html=True)
-
-st.markdown("""
 <div class="footer">
-    <span>PhoneSense © 2025</span>
-    <span>Built with TF-IDF + LogReg</span>
+    <span>Tejash</span>
+    <span>Flask Version</span>
 </div>
-""", unsafe_allow_html=True)
+
+</div>
+</body>
+</html>
+"""
+
+@app.route("/", methods=["GET","POST"])
+def home():
+    result = None
+    confidence = None
+    aspects = None
+    css = ""
+    word = ""
+
+    val_class = {"positive":"apos","negative":"aneg","neutral":"aneu"}
+
+    if request.method == "POST":
+        text = request.form["review"]
+
+        vec = vectorizer.transform([text])
+        result = model.predict(vec)[0]
+
+        proba = model.predict_proba(vec)[0]
+        confidence = round(max(proba)*100)
+
+        if result == "positive":
+            css = "pos"; word = "POSITIVE"
+        elif result == "negative":
+            css = "neg"; word = "NEGATIVE"
+        else:
+            css = "neu"; word = "NEUTRAL"
+
+        aspects = get_aspect_sentiments(text)
+
+    return render_template_string(
+        HTML,
+        result=result,
+        confidence=confidence,
+        aspects=aspects,
+        css=css,
+        word=word,
+        val_class=val_class
+    )
+
+app.run(host="0.0.0.0", port=3000)

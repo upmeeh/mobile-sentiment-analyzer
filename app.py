@@ -51,7 +51,7 @@ def get_aspect_sentiments(review):
                 results[aspect] = pred
     return results
 
-# ---- HTML (ported style) ----
+# ---- HTML (same) ----
 HTML = """
 <!DOCTYPE html>
 <html>
@@ -235,7 +235,7 @@ button {
 
 </div>
 </body>
-</html>
+</html>)
 """
 
 @app.route("/", methods=["GET","POST"])
@@ -252,18 +252,29 @@ def home():
         text = request.form["review"]
 
         vec = vectorizer.transform([text])
-        result = model.predict(vec)[0]
 
+        # ✅ NEW: probability FIRST
         proba = model.predict_proba(vec)[0]
-        confidence = round(max(proba)*100)
+        confidence = round(max(proba) * 100)
 
-        if result == "positive":
-            css = "pos"; word = "POSITIVE"
-        elif result == "negative":
-            css = "neg"; word = "NEGATIVE"
+        # ✅ NEW: neutral logic
+        if max(proba) < 0.6:
+            result = "neutral"
         else:
-            css = "neu"; word = "NEUTRAL"
+            result = model.predict(vec)[0]
 
+        # UI mapping
+        if result == "positive":
+            css = "pos"
+            word = "POSITIVE"
+        elif result == "negative":
+            css = "neg"
+            word = "NEGATIVE"
+        else:
+            css = "neu"
+            word = "NEUTRAL"
+
+        # ✅ FIXED indentation
         aspects = get_aspect_sentiments(text)
 
     return render_template_string(
